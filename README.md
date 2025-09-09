@@ -32,22 +32,6 @@ Before running this application, make sure you have:
    npm install
    ```
 
-3. **Set up environment variables** (optional)
-   Create a `.env` file in the root directory:
-   ```env
-   PORT=3000
-   ```
-
-## Configuration
-
-The application is currently configured to use the Affinda API. You may need to update the API credentials in `server.js`:
-
-```javascript
-// Update these values in server.js
-const AFFINDA_API_KEY = 'your_api_key_here';
-const WORKSPACE_ID = 'your_workspace_id_here';
-```
-
 ## Running the Application
 
 1. **Start the server**

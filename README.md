@@ -23,7 +23,7 @@ Before running this application, make sure you have:
 
 1. **Clone or download this repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/1711naveen/resume-parser.git
    cd resume-parser
    ```
 

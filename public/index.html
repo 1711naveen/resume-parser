@@ -1,0 +1,358 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Resume Parser Demo</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background: #f8f9fa;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"], 
+        input[type="email"], 
+        input[type="tel"], 
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            background: #0366d6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #0256c7;
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.secondary:hover {
+            background: #5a6268;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Resume Parser & Editor</h1>
+        <form id="uploadForm">
+            <div class="form-group">
+                <label for="file">Upload Resume:</label>
+                <input type="file" id="file" accept=".pdf,.doc,.docx,image/*" required />
+            </div>
+            <button type="submit">Parse Resume</button>
+        </form>
+    </div>
+
+    <div id="loadingDiv" class="container hidden">
+        <div class="loading">Processing resume... Please wait.</div>
+    </div>
+
+    <div id="editForm" class="container hidden">
+        <h2>Edit Parsed Data</h2>
+        <form id="resumeForm">
+            <div class="two-column">
+                <div class="form-group">
+                    <label for="firstName">First Name:</label>
+                    <input type="text" id="firstName" name="firstName">
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name:</label>
+                    <input type="text" id="lastName" name="lastName">
+                </div>
+            </div>
+
+            <div class="two-column">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone:</label>
+                    <input type="tel" id="phone" name="phone">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="skills">Skills (comma-separated):</label>
+                <textarea id="skills" name="skills" placeholder="e.g., JavaScript, React, Node.js, Python"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="education">Education:</label>
+                <textarea id="education" name="education" placeholder="e.g., B.Tech in Computer Science - XYZ University (2019-2023)"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="projects">Projects:</label>
+                <textarea id="projects" name="projects" placeholder="List your projects, one per line"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="achievements">Achievements:</label>
+                <textarea id="achievements" name="achievements" placeholder="List your achievements, one per line"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="workExperience">Work Experience:</label>
+                <textarea id="workExperience" name="workExperience" placeholder="List your work experience"></textarea>
+            </div>
+
+            <div style="margin-top: 2rem;">
+                <button type="button" id="saveBtn">Save Changes</button>
+                <button type="button" id="exportBtn" class="secondary">Export as JSON</button>
+                <button type="button" id="newUploadBtn" class="secondary">Upload New Resume</button>
+            </div>
+        </form>
+    </div>
+
+    <div style="margin-top: 2rem;">
+        <div class="container">
+            <button id="toggleJson" class="secondary">Show/Hide Raw JSON</button>
+            <pre id="json" class="hidden"></pre>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = null;
+
+        // DOM elements
+        const uploadForm = document.getElementById('uploadForm');
+        const loadingDiv = document.getElementById('loadingDiv');
+        const editForm = document.getElementById('editForm');
+        const toggleBtn = document.getElementById('toggleJson');
+        const jsonPre = document.getElementById('json');
+        const saveBtn = document.getElementById('saveBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const newUploadBtn = document.getElementById('newUploadBtn');
+
+        // Toggle JSON view
+        toggleBtn.addEventListener('click', () => {
+            jsonPre.classList.toggle('hidden');
+        });
+
+        // Handle new upload button
+        newUploadBtn.addEventListener('click', () => {
+            editForm.classList.add('hidden');
+            jsonPre.classList.add('hidden');
+            document.getElementById('file').value = '';
+            parsedData = null;
+        });
+
+        // Handle save button
+        saveBtn.addEventListener('click', () => {
+            const formData = new FormData(document.getElementById('resumeForm'));
+            const updatedData = {};
+            
+            for (let [key, value] of formData.entries()) {
+                updatedData[key] = value;
+            }
+            
+            alert('Data saved successfully!\n\nUpdated Information:\n' + 
+                  Object.entries(updatedData)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join('\n'));
+        });
+
+        // Handle export button
+        exportBtn.addEventListener('click', () => {
+            const formData = new FormData(document.getElementById('resumeForm'));
+            const exportData = {
+                originalData: parsedData,
+                editedData: {}
+            };
+            
+            for (let [key, value] of formData.entries()) {
+                exportData.editedData[key] = value;
+            }
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'resume_data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Handle file upload and parsing
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData();
+            fd.append('file', document.getElementById('file').files[0]);
+
+            // Show loading state
+            loadingDiv.classList.remove('hidden');
+            editForm.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/parse', { method: 'POST', body: fd });
+                const data = await res.json();
+                parsedData = data;
+
+                // Parse Affinda API response structure
+                const person = data?.data || data;
+                
+                // Extract name (from candidateName array)
+                const candidateName = person?.candidateName?.[0];
+                const firstName = candidateName?.parsed?.firstName?.parsed || '';
+                const familyName = candidateName?.parsed?.familyName?.parsed || '';
+                
+                // Extract email (from email array)
+                const email = person?.email?.[0]?.parsed || person?.email?.[0]?.raw || '';
+                
+                // Extract phone (from phoneNumber array)
+                const phoneData = person?.phoneNumber?.[0]?.parsed;
+                const phone = phoneData?.formattedNumber || phoneData?.rawText || person?.phoneNumber?.[0]?.raw || '';
+                
+                // Extract skills (from skill array)
+                const skills = (person?.skill || []).map(s => s?.parsed?.name || s?.raw).filter(Boolean);
+                
+                // Extract education
+                const education = (person?.education || []).map(edu => {
+                    const accreditation = edu?.parsed?.educationAccreditation?.parsed || '';
+                    const major = edu?.parsed?.educationMajor?.[0]?.parsed || '';
+                    const organization = edu?.parsed?.educationOrganization?.parsed || '';
+                    const grade = edu?.parsed?.educationGrade?.parsed?.educationGradeScore?.parsed || '';
+                    const dates = edu?.parsed?.educationDates?.parsed;
+                    const startYear = dates?.start?.year || '';
+                    const endYear = dates?.end?.year || '';
+                    const location = edu?.parsed?.educationLocation?.parsed?.formatted || '';
+                    
+                    let eduStr = accreditation;
+                    if (major) eduStr += ` in ${major}`;
+                    if (organization) eduStr += ` - ${organization.replace(/,$/, '')}`;
+                    if (location) eduStr += `, ${location}`;
+                    if (startYear && endYear) eduStr += ` (${startYear}-${endYear})`;
+                    if (grade) eduStr += ` | GPA: ${grade}`;
+                    
+                    return eduStr;
+                }).filter(Boolean);
+                
+                // Extract projects
+                const projects = (person?.project || []).map(proj => {
+                    const title = proj?.parsed?.projectTitle?.parsed || proj?.parsed?.projectTitle?.raw || '';
+                    const description = proj?.parsed?.projectDescription?.parsed || proj?.parsed?.projectDescription?.raw || '';
+                    return title + (description ? ': ' + description : '');
+                }).filter(Boolean);
+                
+                // Extract achievements
+                const achievements = (person?.achievement || []).map(ach => ach?.parsed || ach?.raw).filter(Boolean);
+                
+                // Extract work experience (if available)
+                const workExperience = (person?.workExperience || []).map(work => {
+                    const company = work?.parsed?.workExperienceOrganization?.parsed || '';
+                    const title = work?.parsed?.workExperienceJobTitle?.parsed || '';
+                    const dates = work?.parsed?.workExperienceDates?.parsed;
+                    const startDate = dates?.start?.date || '';
+                    const endDate = dates?.end?.date || '';
+                    const description = work?.parsed?.workExperienceDescription?.parsed || work?.raw || '';
+                    
+                    let workStr = '';
+                    if (title) workStr += title;
+                    if (company) workStr += ` at ${company}`;
+                    if (startDate && endDate) workStr += ` (${startDate} - ${endDate})`;
+                    if (description && !description.includes(title) && !description.includes(company)) {
+                        workStr += '\n' + description;
+                    }
+                    
+                    return workStr;
+                }).filter(Boolean);
+
+                // Fill the form with parsed data
+                document.getElementById('firstName').value = firstName;
+                document.getElementById('lastName').value = familyName;
+                document.getElementById('email').value = email;
+                document.getElementById('phone').value = phone;
+                document.getElementById('skills').value = skills.join(', ');
+                document.getElementById('education').value = education.join('\n');
+                document.getElementById('projects').value = projects.join('\n');
+                document.getElementById('achievements').value = achievements.join('\n');
+                document.getElementById('workExperience').value = workExperience.join('\n');
+
+                // Hide loading and show form
+                loadingDiv.classList.add('hidden');
+                editForm.classList.remove('hidden');
+                
+                // Set JSON data
+                document.getElementById('json').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                loadingDiv.innerHTML = `
+                    <div style="border: 1px solid #dc3545; padding: 20px; border-radius: 8px; background: #f8d7da; color: #721c24;">
+                        <strong>❌ Error:</strong> Failed to parse resume. Please try again or check the file format.
+                        <br><small>Error details: ${error.message}</small>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+
+</html>

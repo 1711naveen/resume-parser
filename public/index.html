@@ -2,74 +2,271 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>RChilli Resume Parser Demo</title>
+    <title>Resume Parser Demo (RChilli)</title>
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; }
-      pre { background: #f6f8fa; padding: 1rem; overflow:auto; border-radius: 8px; }
-      label, button { display:block; margin: 0.75rem 0; }
-      #summary p { margin: .25rem 0; }
+      :root {
+        --bg: #0c0c0f;
+        --panel: #16181d;
+        --border: #23272f;
+        --muted: #7d8590;
+        --primary: #2563eb;
+        --chip-bg: #1f2937;
+        --chip-border: #374151;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 2rem 1rem;
+        font-family: system-ui, sans-serif;
+        background: var(--bg); color: #f3f4f6;
+        max-width: 1000px; margin: auto;
+        overflow-x: hidden;  /* prevent horizontal scrollbar */
+      }
+      h1, h2 { margin-top: 0; }
+      .container {
+        display: block;
+        gap: 1.5rem;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+      }
+      button, input[type="file"] {
+        margin-top: 0.5rem;
+      }
+      pre {
+        background: #0d1117; 
+        border: 1px solid #212733;
+        border-radius: 8px;
+        padding: 0.75rem;
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.85rem;
+        line-height: 1.4;
+      }
+      /* Multi-select and chips */
+      .skills-wrapper {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+      }
+      .chip {
+        position: relative;
+        display: inline-block;
+        background: var(--chip-bg);
+        border: 1px solid var(--chip-border);
+        border-radius: 999px;
+        padding: 0.35rem 0.85rem;
+        font-size: 0.9rem;
+      }
+      .chip .remove {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 16px;
+        height: 16px;
+        background: #16181d;
+        color: #9ca3af;
+        border: 1px solid #334155;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 10px;
+        line-height: 16px;
+        text-align: center;
+      }
+      .select-box {
+        position: relative;
+      }
+      .select-box input {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #0c111f;
+        color: #f3f4f6;
+        outline: none;
+      }
+      .dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 10;
+        background: #0c111f;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+      }
+      .dropdown.show {
+        display: block;
+      }
+      .dropdown div {
+        padding: 0.5rem 0.8rem;
+        cursor: pointer;
+      }
+      .dropdown div:hover {
+        background: #1d232a;
+      }
+      /* Summary and parser output */
+      .meta {
+        font-size: 0.9rem;
+        margin-top: 0.3rem;
+      }
+      @media (min-width: 768px) {
+        .container {
+          grid-template-columns: 1fr 0.8fr;
+        }
+      }
     </style>
   </head>
   <body>
-    <h1>Upload Resume → Extract Data (RChilli)</h1>
-    <form id="form">
-      <input type="file" id="file" accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.htm,.html" required />
-      <button type="submit">Parse</button>
-    </form>
-
-    <h2>Extracted Summary</h2>
-    <div id="summary">—</div>
-
-    <h3>Raw JSON</h3>
-    <pre id="json">—</pre>
+    <h1>Resume Parser Demo (RChilli)</h1>
+    <div class="container">
+      <!-- Left panel: Upload + summary + JSON -->
+      <div class="panel">
+        <form id="form">
+          <input type="file" id="file" accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.htm,.html" required />
+          <button type="submit">Parse Resume</button>
+        </form>
+        <h2>Summary</h2>
+        <div id="summary">—</div>
+        <h3>Raw JSON</h3>
+        <pre id="json">—</pre>
+      </div>
+      <!-- Right panel: Skills -->
+      <div class="panel">
+        <h2>Skills</h2>
+        <p class="meta">Only the following 5 skills are considered: Java, Python, Next.js, React.js, Node.js.</p>
+        <div class="skills-wrapper">
+          <div id="chips" class="chips"></div>
+          <div class="select-box">
+            <input type="text" id="filter" placeholder="Type to filter & add…" autocomplete="off" />
+            <div id="dropdown" class="dropdown"></div>
+          </div>
+          <div id="matchInfo" class="meta">Matched 0/5</div>
+        </div>
+      </div>
+    </div>
 
     <script>
-      // Pull simple items safely from RChilli schema
+      // Predefined skills
+      const SKILLS = ["Java","Python","Next.js","React.js","Node.js"];
+
+      // Normalization for parser variants
+      const MAP = new Map([
+        ["java","Java"],
+        ["python","Python"],
+        ["next.js","Next.js"],["nextjs","Next.js"],["next js","Next.js"],
+        ["react.js","React.js"],["reactjs","React.js"],["react js","React.js"],["react","React.js"],
+        ["node.js","Node.js"],["nodejs","Node.js"],["node js","Node.js"],["node","Node.js"],
+      ]);
+
+      // State
+      const selected = new Set();
+      const chipsEl = document.getElementById('chips');
+      const dropdown = document.getElementById('dropdown');
+      const filter = document.getElementById('filter');
+      const matchInfo = document.getElementById('matchInfo');
+
+      function renderChips() {
+        chipsEl.innerHTML = '';
+        selected.forEach(skill => {
+          const div = document.createElement('div');
+          div.className = 'chip';
+          div.innerHTML = `<span>${skill}</span><span class="remove">&times;</span>`;
+          div.querySelector('.remove').onclick = () => { selected.delete(skill); updateUI(); };
+          chipsEl.appendChild(div);
+        });
+        matchInfo.textContent = `Matched ${selected.size}/${SKILLS.length}` + 
+          (selected.size ? `: ${Array.from(selected).join(', ')}` : '');
+      }
+
+      function renderDropdown() {
+        const query = filter.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        SKILLS.forEach(skill => {
+          if (query && !skill.toLowerCase().includes(query)) return;
+          const item = document.createElement('div');
+          item.textContent = skill;
+          item.onclick = () => {
+            if (selected.has(skill)) return;
+            selected.add(skill);
+            updateUI();
+          };
+          dropdown.appendChild(item);
+        });
+      }
+
+      function updateUI() {
+        renderChips();
+        renderDropdown();
+      }
+
+      // Dropdown toggle
+      filter.addEventListener('focus', () => {
+        dropdown.classList.add('show');
+        renderDropdown();
+      });
+      filter.addEventListener('input', renderDropdown);
+      document.addEventListener('click', e => {
+        if (!filter.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      });
+
+      // Initialize UI
+      updateUI();
+
+      // Resume parsing logic
+      function normalize(skill) {
+        const key = skill.trim().toLowerCase();
+        return MAP.get(key) || null;
+      }
+
       function first(arr) { return Array.isArray(arr) && arr.length ? arr[0] : null; }
 
-      document.getElementById('form').addEventListener('submit', async (e) => {
+      document.getElementById('form').addEventListener('submit', async e => {
         e.preventDefault();
-        const fileInput = document.getElementById('file');
-        if (!fileInput.files.length) return;
+        if (!document.getElementById('file').files.length) return;
 
         const fd = new FormData();
-        fd.append('file', fileInput.files[0]);
-
+        fd.append('file', document.getElementById('file').files[0]);
         const res = await fetch('/api/parse', { method: 'POST', body: fd });
         const data = await res.json();
+
+        // Show JSON
         document.getElementById('json').textContent = JSON.stringify(data, null, 2);
 
         const d = data?.ResumeParserData || {};
-
-        const name = d?.Name?.FullName || d?.Name?.FormattedName || '—';
+        const name  = d?.Name?.FullName || d?.Name?.FormattedName || '—';
         const email = first(d?.Email)?.EmailAddress || '—';
         const phone = first(d?.PhoneNumber)?.FormattedNumber || first(d?.PhoneNumber)?.Number || '—';
+        const totExp = d?.WorkedPeriod?.TotalExperienceInYear || d?.WorkedPeriod?.TotalExperienceInYears || '—';
+        const companies = (d?.SegregatedExperience || []).map(x => x?.Employer?.EmployerName).filter(Boolean).slice(0,6);
 
-        const totalExpYears =
-          d?.WorkedPeriod?.TotalExperienceInYear ||
-          d?.WorkedPeriod?.TotalExperienceInYears ||
-          '—';
+        // Update summary
+        document.getElementById('summary').innerHTML =
+          `<p><strong>Name:</strong> ${name}</p>
+           <p><strong>Email:</strong> ${email}</p>
+           <p><strong>Phone:</strong> ${phone}</p>
+           <p><strong>Total Experience:</strong> ${totExp} years</p>
+           <p><strong>Previous Companies:</strong> ${companies.length ? companies.join(', ') : '—'}</p>`;
 
-        const skills =
-          (d?.SegregatedSkill || [])
-            .map(s => s?.Skill)
-            .filter(Boolean)
-            .slice(0, 12);
-
-        const companies =
-          (d?.SegregatedExperience || [])
-            .map(x => x?.Employer?.EmployerName)
-            .filter(Boolean)
-            .slice(0, 6);
-
-        document.getElementById('summary').innerHTML = `
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Total Experience:</strong> ${totalExpYears} years</p>
-          <p><strong>Skills:</strong> ${skills.length ? skills.join(', ') : '—'}</p>
-          <p><strong>Previous Companies:</strong> ${companies.length ? companies.join(', ') : '—'}</p>
-        `;
+        // Clear previous skills and auto-select matches
+        selected.clear();
+        const skillsFromResume = (d?.SegregatedSkill || []).map(s => s?.Skill).filter(Boolean);
+        skillsFromResume.forEach(raw => {
+          const canonical = normalize(raw);
+          if (canonical && SKILLS.includes(canonical)) selected.add(canonical);
+        });
+        updateUI();
       });
     </script>
   </body>
